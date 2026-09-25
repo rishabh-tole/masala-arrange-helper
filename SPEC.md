@@ -1,6 +1,6 @@
 # Masala Arrange Helper — Product and Technical Specification
 
-**Version:** 1.0.0  
+**Version:** 1.1.0
 **Target:** MuseScore Studio 4.x  
 **Plugin type:** QML dialog plugin  
 **Primary ensemble:** Bass, Baritone, Tenor 2, Tenor 1
@@ -36,7 +36,7 @@ The plugin must support these core arranging jobs:
 
 ## 3. Scope
 
-### 3.1 Included in version 1.0
+### 3.1 Included in version 1.1
 
 - Major, natural-minor, and harmonic-minor diatonic palettes
 - Triad and seventh-chord palette modes
@@ -64,6 +64,7 @@ The plugin must support these core arranging jobs:
 - Upward and downward role rotation
 - Suggested range, voice-crossing, spacing, and missing-tone warnings
 - Staff mapping
+- Shared-staff block-chord insertion
 - Selected-score-chord analysis
 - Single-chord insertion
 - Full-progression insertion
@@ -73,7 +74,7 @@ The plugin must support these core arranging jobs:
 - Advanced controls collapsed by default
 - One undo group for each insertion operation
 
-### 3.2 Deliberate non-goals for version 1.0
+### 3.2 Deliberate non-goals for version 1.1
 
 - Native palette-style dropping directly onto arbitrary page coordinates in the MuseScore notation canvas
 - Saving progression projects between plugin sessions
@@ -82,7 +83,6 @@ The plugin must support these core arranging jobs:
 - Automatic bass-line generation
 - Microtonal chords
 - More than four vocal parts
-- Multiple simultaneous notes on one vocal staff
 - A stand-alone synthesizer independent of the MuseScore score
 
 ## 4. Interaction model
@@ -92,7 +92,7 @@ The plugin must support these core arranging jobs:
 The dialog uses one vertically scrollable page in this order:
 
 ```text
-Harmony → Palette → Progression → Voicing + staff preview → Insert → Advanced
+Harmony → Palette → Progression → Insert → Voicing + staff preview → Advanced
 ```
 
 Voicing controls and staff preview sit side by side at wide widths. They stack vertically below 860 pixels. The Advanced panel starts collapsed.
@@ -171,7 +171,13 @@ The default mapping uses the bottom four score staves in this order:
 3. Baritone
 4. Bass
 
-Each part can instead be mapped to any distinct staff number in the open score.
+Each part can instead be mapped to any staff number in the open score. Multiple
+parts may share a staff; their pitches are written into one block chord in voice 1.
+Exact unisons use one visible notehead.
+
+Scores with fewer than four staves receive practical defaults: all parts on a
+single staff; T1/T2 above Baritone/Bass on two staves; or Baritone/Bass sharing
+the third staff on three staves.
 
 To insert, the user selects a note, rest, chord, or range start in MuseScore. The plugin uses that tick as the insertion point and writes voice 1 on each mapped staff.
 
@@ -179,7 +185,7 @@ To insert, the user selects a note, rest, chord, or range start in MuseScore. Th
 
 The user selects a score beat and a destination progression card, then chooses **Analyze notes at score selection**. The plugin:
 
-1. Reads one note from each mapped staff at that tick.
+1. Reads one note per assigned part at that tick, taking shared-staff chord notes from low part to high part.
 2. Compares the four pitch classes with every supported root/quality combination.
 3. Chooses the best complete or subset-compatible chord interpretation, favoring a bass root when otherwise tied.
 4. Loads the detected root, quality, exact chord-member assignment, and octave into the selected progression card.
@@ -259,11 +265,15 @@ All progression cards are inserted consecutively from the selected score tick. T
 
 A single-chord insert is one MuseScore undo step. A complete-progression insert is also one undo step.
 
-The plugin writes voice 1. MuseScore's current note-entry behavior determines how existing material at the target location is replaced, split, or combined. The user should test on a copy or save before inserting into occupied music.
+The plugin writes voice 1. Parts sharing a staff are grouped before insertion;
+the first pitch creates the chord and remaining pitches join the same chord cell.
+MuseScore's current note-entry behavior determines how existing material at the
+target location is replaced, split, or combined. The user should test on a copy
+or save before inserting into occupied music.
 
 ## 9. Preview design
 
-The public QML plugin interface does not provide a simple arbitrary four-note MIDI-audition function. Version 1.0 therefore uses this score-based preview sequence:
+The public QML plugin interface does not provide a simple arbitrary four-note MIDI-audition function. Version 1.1 therefore uses this score-based preview sequence:
 
 1. Remember the current selection.
 2. Add one temporary measure at the score end.
@@ -280,8 +290,7 @@ The dialog prevents insertion actions while preview is active. The user can stop
 The status strip reports:
 
 - No open score
-- Fewer than four staves
-- Invalid or duplicate staff mappings
+- Invalid staff mappings
 - No selected progression chord
 - No usable score selection
 - Missing score notes during analysis
@@ -299,7 +308,7 @@ The public plugin API does not expose the notation canvas as a palette-compatibl
 
 ## 12. Acceptance criteria
 
-Version 1.0 is functionally complete when all of the following hold:
+Version 1.1 is functionally complete when all of the following hold:
 
 1. Every key and supported mode produces seven correct diatonic palette chords.
 2. Clicking a palette card appends a complete four-part chord.
@@ -311,7 +320,7 @@ Version 1.0 is functionally complete when all of the following hold:
 8. Role rotation changes who sings Root, 3rd, 5th, and 7th.
 9. Close, spread, and smooth voicings contain every chord member and avoid crossing when a valid in-range solution exists.
 10. Range, crossing, spacing, and missing-member warnings update immediately.
-11. A valid four-staff score chord can be analyzed into the editor.
+11. A valid mapped score chord, including shared-staff block chords, can be analyzed into the editor.
 12. One chord inserts at the selected score tick.
 13. A progression inserts consecutively with per-chord durations.
 14. Each insert operation is one undo step.
@@ -319,6 +328,8 @@ Version 1.0 is functionally complete when all of the following hold:
 16. Main page resizes without horizontal page scrolling and stacks voicing/preview when narrow.
 17. Advanced controls start collapsed and remain reachable through the vertical page scroll.
 18. Staff preview updates all four requested clefs, pitches, accidentals, and ledger lines after each voicing edit.
+19. Parts mapped to the same staff insert into one block chord.
+20. One-, two-, and three-staff scores receive useful shared-part defaults.
 
 ## 13. Future extensions
 

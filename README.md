@@ -1,4 +1,4 @@
-# Masala Arrange Helper 1.0.0
+# Masala Arrange Helper 1.1.0
 
 A MuseScore Studio 4 plugin for building, editing, previewing, and inserting four-part vocal voicings for:
 
@@ -13,7 +13,7 @@ The plugin includes a live four-staff voicing preview, internal chord-card drag-
 
 ### 1. Extract the ZIP
 
-Extract `MasalaArrangeHelper-1.0.0.zip`. Keep the resulting `MasalaArrangeHelper` folder intact.
+Extract `MasalaArrangeHelper-1.1.0.zip`. Keep the resulting `MasalaArrangeHelper` folder intact.
 
 The important file path should end like this:
 
@@ -58,8 +58,8 @@ You can assign it a keyboard shortcut from MuseScore's shortcut preferences by s
 
 ## Prepare a score
 
-The plugin needs at least four staves. It maps to the bottom four staves by
-default, preserving this top-to-bottom vocal order:
+The plugin works with one or more staves. On scores with at least four staves,
+it maps to the bottom four by default in this top-to-bottom vocal order:
 
 ```text
 Fourth staff from bottom: Tenor 1
@@ -68,11 +68,14 @@ Second staff from bottom: Baritone
 Bottom staff:             Bass
 ```
 
-The staves do not need those exact names. Change the four mapping controls in the plugin when your score uses a different order.
+For one-staff scores, all four parts default to that staff. For two staves,
+T1/T2 share the upper staff and Baritone/Bass share the lower. For three staves,
+Baritone/Bass share the third staff. Change the mapping controls in **Advanced**
+to use any layout. Parts assigned to the same staff form one block chord.
 
 ## First-use walkthrough
 
-1. Open a four-staff score.
+1. Open a score with one or more staves.
 2. Run **Plugins → Masala Arrange Helper**.
 3. Choose a key and mode.
 4. Click palette cards to build a progression. You can also drag them into the progression lane.
@@ -88,7 +91,7 @@ The staves do not need those exact names. Change the four mapping controls in th
 The main workflow is one vertically scrollable page:
 
 ```text
-Harmony → Palette → Progression → Voicing + staff preview → Insert
+Harmony → Palette → Progression → Insert → Voicing + staff preview
 ```
 
 At wide widths, voicing controls and staff preview sit side by side. At narrow widths, staff preview moves below voicing controls. Horizontal scrolling is disabled for the page.
@@ -139,7 +142,7 @@ The **tone** buttons move one singer to the next or previous available chord ton
 ## Analyze an existing score chord
 
 1. Add or select a progression card.
-2. Select a score beat containing one note on each mapped vocal staff.
+2. Select a score beat containing one note per assigned part. Shared-staff notes must be in one chord.
 3. Press **Analyze notes at score selection**.
 
 The plugin detects a supported root and quality, then loads the exact Bass, Baritone, T2, and T1 notes into the card.
@@ -157,7 +160,10 @@ Do not close MuseScore during the brief preview. If the temporary measure ever r
 
 ## Insertion behavior
 
-Insertion writes voice 1 on the four mapped staves. A single chord is grouped as one undo step. A complete progression is also grouped as one undo step.
+Insertion writes voice 1 on every mapped staff. Parts sharing a staff are added
+to the same MuseScore chord cell; exact unisons become one visible notehead. A
+single chord is grouped as one undo step. A complete progression is also grouped
+as one undo step.
 
 MuseScore decides how newly entered notes interact with existing material. When testing in an occupied passage, save first or work on a copy.
 
@@ -180,9 +186,8 @@ Major, minor, diminished, augmented, dominant 7, major 7, minor 7, half-diminish
 
 - Drag-and-drop works within the plugin, not directly onto the MuseScore page.
 - Progressions are not saved after the plugin dialog closes.
-- Version 1.0 writes notes only; it does not add chord symbols or lyrics.
+- Version 1.1 writes notes only; it does not add chord symbols or lyrics.
 - The live staff preview shows pitch placement, not MuseScore's full engraving output.
-- It assumes one monophonic vocal note in voice 1 on each mapped staff.
 - Preview depends on MuseScore's playback actions and Undo behavior.
 
 ## Validation status
@@ -197,14 +202,18 @@ The source has passed:
 - Automatic voicing tests for all 13 supported qualities in all 12 roots, totaling 156 quality/root cases
 - Responsive-layout, collapsed-Advanced, drag-and-drop, and staff-preview contract tests
 - Staff-placement tests for treble/bass clefs, accidentals, and ledger lines
+- Shared-staff block-chord grouping, deduplication, defaults, and analysis tests
 
-MuseScore Studio 4.6.3 loaded the plugin from this directory without a QML parse failure. Runtime logging exposed one progression-card binding error, which was fixed and covered by a regression test. Final visual resizing and interaction still need a manual in-app pass because macOS blocked automated UI and screenshot control.
+MuseScore Studio 4.6.3 loaded version 1.1.0 without a QML parse failure.
+Shared-staff insertion, block-chord output, and the revised action layout passed
+an in-app interaction check.
 
 ## Files
 
 ```text
 MasalaArrangeHelper.qml  Plugin source
 StaffPreview.js          Staff-preview pitch and ledger-line helpers
+ScoreInsertion.js        Shared-staff mapping and block-chord helpers
 SPEC.md                  Full product and technical specification
 README.md                Installation and use guide
 VALIDATION.md            Static test record and runtime checklist

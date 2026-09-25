@@ -1,7 +1,7 @@
 # Validation Record
 
-**Package:** Masala Arrange Helper 1.0.0  
-**Date:** 2026-07-16
+**Package:** Masala Arrange Helper 1.1.0
+**Date:** 2026-09-24
 
 ## Completed automated checks
 
@@ -35,7 +35,7 @@ The automatic-voicing matrix contained 156 quality/root cases. Every case produc
 
 ### UI and staff-preview validation
 
-Eleven Node tests now verify:
+Twenty-one Node tests now verify:
 
 - One vertically scrollable page with horizontal scrolling disabled
 - Responsive side-by-side/stacked voicing and staff-preview layout
@@ -48,12 +48,16 @@ Eleven Node tests now verify:
 - Balanced QML delimiters and unique QML IDs
 - Valid syntax for all 75 named QML JavaScript functions
 - Valid staff-preview JavaScript syntax
+- One-, two-, three-, and four-plus staff mapping defaults
+- Same-staff block-chord grouping and exact-unison deduplication
+- Shared-staff analysis from low part to high part
+- Large insertion controls placed before voicing controls
 
 ### MuseScore runtime load
 
-MuseScore Studio 4.6.3 loaded the plugin from its installed plugin directory with no QML parse failure. Live logging exposed one progression-card duration-role binding error after a chord was added. That binding now reads the duration from the delegate's explicit model row and has a regression test.
-
-macOS Assistive Access prevented automated menu and screenshot control, so final visual resize interaction remains a manual check.
+MuseScore Studio 4.6.3 loaded version 1.1.0 from its installed plugin directory
+with no QML parse failure. Shared-staff insertion, block-chord output, and the
+revised action layout passed an in-app interaction check.
 
 ## Package validation
 
@@ -66,7 +70,7 @@ Before release, the ZIP is checked for:
 
 ## Runtime checklist for the first MuseScore launch
 
-These interaction checks remain for final in-application sign-off:
+Use this checklist for future release regression passes:
 
 1. Plugin appears in Manage plugins and can be enabled.
 2. Dialog opens without new QML console errors.
@@ -81,7 +85,7 @@ These interaction checks remain for final in-application sign-off:
 11. Chord-member and octave controls update notes.
 12. Close, spread, smooth, and rotate actions update the voicing.
 13. A selected rest provides a valid insertion tick.
-14. Single-chord insertion writes one note on each mapped staff.
+14. Single-chord insertion writes one chord on each mapped staff, combining shared parts.
 15. Full-progression insertion advances by stored durations.
 16. Undo reverses each insert in one step.
 17. Score-chord analysis reads four mapped notes.

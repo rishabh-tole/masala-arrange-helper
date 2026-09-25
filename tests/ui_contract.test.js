@@ -38,9 +38,26 @@ test("plugin is modeless and maps voices to the bottom four staves", () => {
     assert.match(qml, /hostWindow\.maximumHeight = 16777215/);
     assert.match(qml, /width:\s*root\.hostWindow \? root\.hostWindow\.width : root\.implicitWidth/);
     assert.match(qml, /height:\s*root\.hostWindow \? root\.hostWindow\.height : root\.implicitHeight/);
-    assert.match(qml, /var firstVocalStaff = Math\.max\(1, curScore\.nstaves - 3\)/);
-    assert.match(qml, /t1StaffNumber = firstVocalStaff/);
-    assert.match(qml, /bassStaffNumber = Math\.min\(firstVocalStaff \+ 3, curScore\.nstaves\)/);
+    assert.match(qml, /Insertion\.defaultStaffMapping\(curScore\.nstaves\)/);
+});
+
+test("shared staff mappings insert one block chord per staff", () => {
+    assert.doesNotMatch(qml, /Each vocal part must be mapped to a different staff/);
+    assert.doesNotMatch(qml, /curScore\.nstaves < 4/);
+    assert.match(qml, /Insertion\.groupEntriesByStaff\(entries\)/);
+    assert.match(qml, /cursor\.addNote\(group\.pitches\[0\]\)/);
+    assert.match(qml, /cursor\.addNote\(group\.pitches\[pitchIndex\], true\)/);
+    assert.match(qml, /Insertion\.assignPitchesToVoices\(voiceEntries, pitchesByStaff\)/);
+});
+
+test("large score actions appear before voicing controls", () => {
+    const actionBar = qml.indexOf("id: primaryActionBar");
+    const voicing = qml.indexOf("id: voicingPreviewGrid");
+
+    assert.ok(actionBar >= 0, "primary action bar exists");
+    assert.ok(voicing > actionBar, "primary action bar appears before voicing controls");
+    assert.match(qml, /id:\s*insertChordButton[\s\S]*?Layout\.preferredHeight:\s*52/);
+    assert.match(qml, /id:\s*insertProgressionButton[\s\S]*?Layout\.preferredHeight:\s*52/);
 });
 
 test("advanced controls start collapsed and remain available", () => {

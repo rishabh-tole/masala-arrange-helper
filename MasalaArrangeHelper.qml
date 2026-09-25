@@ -13,11 +13,12 @@ import QtQuick.Layouts
 import QtQuick.Window
 import MuseScore 3.0
 import "StaffPreview.js" as StaffPreview
+import "ScoreInsertion.js" as Insertion
 
 MuseScore {
     id: root
 
-    version: "1.0.0"
+    version: "1.1.0"
     title: "Masala Arrange Helper"
     description: "Build, audition, revoice, and insert four-part Masala-style vocal chords."
     pluginType: "dock"
@@ -898,25 +899,13 @@ MuseScore {
                 setStatus("Open a score before inserting or previewing.", true)
             return false
         }
-        if (curScore.nstaves < 4) {
-            if (showMessage)
-                setStatus("This version needs at least four staves: T1, T2, Baritone, and Bass.", true)
-            return false
-        }
         var numbers = [t1StaffNumber, t2StaffNumber, bariStaffNumber, bassStaffNumber]
-        var seen = {}
         for (var i = 0; i < numbers.length; ++i) {
             if (numbers[i] < 1 || numbers[i] > curScore.nstaves) {
                 if (showMessage)
                     setStatus("Every mapped staff number must be between 1 and " + curScore.nstaves + ".", true)
                 return false
             }
-            if (seen[numbers[i]]) {
-                if (showMessage)
-                    setStatus("Each vocal part must be mapped to a different staff.", true)
-                return false
-            }
-            seen[numbers[i]] = true
         }
         return true
     }
@@ -1002,13 +991,24 @@ MuseScore {
 
     function insertChordAtTick(chord, tick, durationIndex) {
         var duration = durationAt(durationIndex)
+        var entries = []
         for (var i = 0; i < voiceDefinitions.length; ++i) {
             var voiceId = voiceDefinitions[i].id
+            entries.push({
+                staffNumber: staffNumberForVoice(voiceId),
+                pitch: voicePitch(chord, voiceId)
+            })
+        }
+        var groups = Insertion.groupEntriesByStaff(entries)
+        for (var groupIndex = 0; groupIndex < groups.length; ++groupIndex) {
+            var group = groups[groupIndex]
             var cursor = curScore.newCursor()
-            cursor.track = (staffNumberForVoice(voiceId) - 1) * 4
+            cursor.track = (group.staffNumber - 1) * 4
             cursor.rewindToTick(tick)
             cursor.setDuration(duration.num, duration.den)
-            cursor.addNote(voicePitch(chord, voiceId))
+            cursor.addNote(group.pitches[0])
+            for (var pitchIndex = 1; pitchIndex < group.pitches.length; ++pitchIndex)
+                cursor.addNote(group.pitches[pitchIndex], true)
         }
     }
 
@@ -1075,18 +1075,22 @@ MuseScore {
         }
     }
 
-    function pitchAtMappedStaff(voiceId, tick) {
+    function pitchesAtStaff(staffNumber, tick) {
         var cursor = curScore.newCursor()
-        cursor.track = (staffNumberForVoice(voiceId) - 1) * 4
+        cursor.track = (staffNumber - 1) * 4
         cursor.rewindToTick(tick)
         if (!cursor.segment || cursor.tick !== tick || !cursor.element)
-            return -1
+            return []
         var element = cursor.element
-        if (element.type === Element.CHORD && element.notes && element.notes.length > 0)
-            return element.notes[0].pitch
+        if (element.type === Element.CHORD && element.notes && element.notes.length > 0) {
+            var result = []
+            for (var i = 0; i < element.notes.length; ++i)
+                result.push(element.notes[i].pitch)
+            return result
+        }
         if (element.type === Element.NOTE)
-            return element.pitch
-        return -1
+            return [element.pitch]
+        return []
     }
 
     function uniquePitchClasses(pitches) {
@@ -1129,14 +1133,19 @@ MuseScore {
         if (tick < 0)
             return
         var ids = ["bass", "bari", "t2", "t1"]
-        var pitches = []
+        var voiceEntries = []
+        var pitchesByStaff = {}
         for (var i = 0; i < ids.length; ++i) {
-            var pitch = pitchAtMappedStaff(ids[i], tick)
-            if (pitch < 0) {
-                setStatus("No note was found on the mapped " + voiceDefinition(ids[i]).label + " staff at that beat.", true)
-                return
-            }
-            pitches.push(pitch)
+            var staffNumber = staffNumberForVoice(ids[i])
+            voiceEntries.push({ voiceId: ids[i], staffNumber: staffNumber })
+            var staffKey = "staff-" + staffNumber
+            if (pitchesByStaff[staffKey] === undefined)
+                pitchesByStaff[staffKey] = pitchesAtStaff(staffNumber, tick)
+        }
+        var pitches = Insertion.assignPitchesToVoices(voiceEntries, pitchesByStaff)
+        if (!pitches) {
+            setStatus("Each mapped staff needs one written note per assigned part at that beat.", true)
+            return
         }
 
         var unique = uniquePitchClasses(pitches)
@@ -1283,14 +1292,12 @@ MuseScore {
             setStatus("Open a score before running Masala Arrange Helper.", true)
             return
         }
-        var firstVocalStaff = Math.max(1, curScore.nstaves - 3)
-        t1StaffNumber = firstVocalStaff
-        t2StaffNumber = Math.min(firstVocalStaff + 1, curScore.nstaves)
-        bariStaffNumber = Math.min(firstVocalStaff + 2, curScore.nstaves)
-        bassStaffNumber = Math.min(firstVocalStaff + 3, curScore.nstaves)
+        var mapping = Insertion.defaultStaffMapping(curScore.nstaves)
+        t1StaffNumber = mapping.t1
+        t2StaffNumber = mapping.t2
+        bariStaffNumber = mapping.bari
+        bassStaffNumber = mapping.bass
         rebuildPalette()
-        if (curScore.nstaves < 4)
-            setStatus("Open or create a score with at least four staves before inserting chords.", true)
     }
 
     Component.onDestruction: {
@@ -1323,12 +1330,25 @@ MuseScore {
                     Layout.fillWidth: true
                     spacing: 8
 
-                    Label {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: "Masala Arrange Helper"
-                        elide: Text.ElideRight
-                        font.pixelSize: 21
-                        font.bold: true
+                        spacing: 1
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Masala Arrange Helper"
+                            elide: Text.ElideRight
+                            font.pixelSize: 22
+                            font.bold: true
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Build voicings, preview them, then write them into your score."
+                            elide: Text.ElideRight
+                            opacity: 0.65
+                            font.pixelSize: 11
+                        }
                     }
 
                     Button {
@@ -1754,6 +1774,80 @@ MuseScore {
                     }
                 }
 
+                Frame {
+                    id: primaryActionBar
+                    Layout.fillWidth: true
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 7
+
+                        RowLayout {
+                            Layout.fillWidth: true
+
+                            Label {
+                                text: "4 · Write to score"
+                                font.bold: true
+                                font.pixelSize: 16
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Label {
+                                text: "Select a score beat first"
+                                opacity: 0.65
+                                font.pixelSize: 11
+                            }
+                        }
+
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: root.width < 700 ? 1 : 3
+                            columnSpacing: 8
+                            rowSpacing: 8
+
+                            Button {
+                                id: insertChordButton
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 52
+                                text: "Insert chord"
+                                highlighted: true
+                                font.bold: true
+                                font.pixelSize: 15
+                                enabled: root.selectedChord() !== null && !root.previewActive
+                                onClicked: root.insertSelectedIntoScore()
+                            }
+
+                            Button {
+                                id: insertProgressionButton
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 52
+                                text: "Insert progression"
+                                font.bold: true
+                                font.pixelSize: 15
+                                enabled: progressionModel.count > 0 && !root.previewActive
+                                onClicked: root.insertProgressionIntoScore()
+                            }
+
+                            Button {
+                                id: hearChordButton
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 52
+                                text: root.previewActive ? "Stop preview" : "Hear chord"
+                                font.bold: true
+                                font.pixelSize: 15
+                                enabled: root.selectedChord() !== null
+                                onClicked: {
+                                    if (root.previewActive)
+                                        root.finishPreview("Preview stopped.")
+                                    else
+                                        root.previewSelectedChord()
+                                }
+                            }
+                        }
+                    }
+                }
+
                 GridLayout {
                     id: voicingPreviewGrid
                     Layout.fillWidth: true
@@ -1777,8 +1871,8 @@ MuseScore {
                                 Label {
                                     Layout.fillWidth: true
                                     text: root.selectedChord()
-                                          ? "4 · Voice " + root.chordSymbol(root.selectedChord())
-                                          : "4 · Voicing"
+                                          ? "5 · Voice " + root.chordSymbol(root.selectedChord())
+                                          : "5 · Voicing"
                                     font.bold: true
                                     font.pixelSize: 16
                                     elide: Text.ElideRight
@@ -2123,38 +2217,6 @@ MuseScore {
                     }
                 }
 
-                Frame {
-                    Layout.fillWidth: true
-
-                    Flow {
-                        anchors.fill: parent
-                        spacing: 7
-
-                        Button {
-                            text: root.previewActive ? "Stop preview" : "Hear chord"
-                            enabled: root.selectedChord() !== null
-                            onClicked: {
-                                if (root.previewActive)
-                                    root.finishPreview("Preview stopped.")
-                                else
-                                    root.previewSelectedChord()
-                            }
-                        }
-
-                        Button {
-                            text: "Insert chord"
-                            enabled: root.selectedChord() !== null && !root.previewActive
-                            onClicked: root.insertSelectedIntoScore()
-                        }
-
-                        Button {
-                            text: "Insert progression"
-                            enabled: progressionModel.count > 0 && !root.previewActive
-                            onClicked: root.insertProgressionIntoScore()
-                        }
-                    }
-                }
-
                 Button {
                     Layout.fillWidth: true
                     text: root.advancedExpanded ? "Advanced ▾" : "Advanced ▸"
@@ -2290,6 +2352,14 @@ MuseScore {
                         Label {
                             text: "Staff mapping"
                             font.bold: true
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Assign multiple parts to one staff to write them as a block chord."
+                            wrapMode: Text.WordWrap
+                            opacity: 0.65
+                            font.pixelSize: 11
                         }
 
                         GridLayout {
